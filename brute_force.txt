@@ -1,0 +1,26 @@
+Prime List:
+SET a list of primes
+FOR number in range(2, input number + 1):
+    SET is_prime to True
+    FOR prime in list of primes:
+        IF number % prime == 0:
+            SET is_prime to False
+            BREAK out of the loop
+    ENDFOR
+    IF is_prime:
+        ADD number to the primes list
+    ENDIF
+ENDFOR
+PRINT primes list
+
+Palindromic product:
+SET tracking value to 0
+FOR first factor in the range of intergers:
+    FOR second factor from first factor to the largest interger in the range:
+        MULTIPLE first and second factor
+        IF string(multiple) is similar in reversion and multiple > tracking value :
+            MODIFY tracking value to multiple
+        ENDIF
+    ENDFOR
+ENDFOR
+PRINT tracking value
