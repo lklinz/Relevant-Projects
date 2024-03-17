@@ -1,35 +1,34 @@
 def merge(array_one,array_two):
-    temporary_array = []
-    while len(array_one) > 0 and len(array_two) >0:
-        if array_one[0] > array_two[0]:
-            temporary_array.append(array_two[0])
-            array_two.remove(array_two[0])
+
+    tempo_array = []
+    flag1 = flag2 = 0
+
+    while len(array_one) > flag1 and len(array_two) > flag2:
+        if array_one[flag1] > array_two[flag2]:
+            tempo_array.append(array_two[flag2])
+            flag2 += 1
         else:
-            temporary_array.append(array_one[0])
-            array_one.remove(array_one[0])
-    while len(array_one) > 0: 
-        temporary_array.append(array_one[0])
-        array_one.remove(array_one[0])
-    while len(array_two) > 0:
-        temporary_array.append(array_two[0])
-        array_two.remove(array_two[0])  
-    return temporary_array
+            tempo_array.append(array_one[flag1])
+            flag1 += 1
+
+    tempo_array.extend(array_one[flag1:])
+    tempo_array.extend(array_two[flag2:])
+
+    return tempo_array
+
 
 def mergesort(array):
-    array_stored = []
+
     if len(array) == 1:
         return array
-    array1 = []
-    array2 = []
-    for num in range(len(array)):
-        if num < len(array)/2:
-            array1.append(array[num])
-        else:
-            array2.append(array[num])
-        array_stored.append(array2)
-    array1 = mergesort(array1)
+    mid = len(array) //2
+    array1 = array[:mid]
+    array2 = array[mid:]
 
-    print(merge(array1,array2))
-    while len(array_stored) > 0:
-        mergesort(array_stored)
-mergesort([6, 5, 5, 7, 4])
+
+
+    array1 = mergesort(array1)
+    array2 = mergesort(array2)
+    return merge(array1,array2)
+
+mergesort([6, 5, 5, 7, 4, 8, 3, 5, 1, 2, 9])
