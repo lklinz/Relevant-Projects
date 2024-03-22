@@ -106,6 +106,11 @@ def getting_value(items_list):
     for weight in items_list:
         value += weight_value[weight][1]
     return value
+def getting_weight(items_list):
+    weight = 0
+    for w in items_list:
+        weight += weight_value[w][0]
+    return weight
 
 import random
 
@@ -114,10 +119,18 @@ def knapsack(capacity):
     '''INITIALIZE'''
 
     parent_knapsack = []
-    while len(parent_knapsack) < capacity:
-        flag = random.randint(1,100)
-        parent_knapsack.append(flag)
-    print('Initial',parent_knapsack)
+    item = 1
+    parent_knapsack_weight = getting_weight(parent_knapsack)
+    while parent_knapsack_weight <= capacity:
+        parent_knapsack.append(item)
+        parent_knapsack_weight = getting_weight(parent_knapsack)
+        if parent_knapsack_weight > capacity:
+                parent_knapsack.remove(item)
+                parent_knapsack_weight = getting_weight(parent_knapsack)
+                break
+        item +=1
+    
+    print('Initial',parent_knapsack,parent_knapsack_weight)
 
     parent_knapsack_value = getting_value(parent_knapsack)
 
@@ -137,16 +150,20 @@ def knapsack(capacity):
             best_offspring_copy = best_offspring.copy()
             best_offspring_copy.remove(picked)
             best_offspring_copy.append(random.randint(1,100))
-            candidate_best_offspring_value = getting_value(best_offspring_copy) 
+            candidate_best_offspring_value = getting_value(best_offspring_copy)
+            candidate_best_offspring_weight = getting_weight(best_offspring_copy) 
 
             '''SELECT'''
 
-            if candidate_best_offspring_value > best_offspring_value:
+            if candidate_best_offspring_value > best_offspring_value and candidate_best_offspring_weight <= capacity:
                 best_offspring_value = candidate_best_offspring_value
                 best_offspring = best_offspring_copy
+                parent_knapsack_weight = candidate_best_offspring_weight
+        
         parent_knapsack = best_offspring
         parent_knapsack_value = best_offspring_value
 
-        print(f'Generation {gen} knapsack are items: {parent_knapsack} worth {parent_knapsack_value} value' )
+
+        print(f'Generation {gen} knapsack are items: {parent_knapsack} worth {parent_knapsack_value} value and {parent_knapsack_weight} weight' )
 
 knapsack(300)
