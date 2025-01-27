@@ -1,6 +1,7 @@
 This respitory contains all the projects I have done using Python and SQL 
 
 --PYTHON
+
 --account maintenance interface implements several classes, overloading with methods to display and track transactions log of an imaginary set of users.
 
 --traveling salesperson applies 3 algorithms, including greedy, evolutionary, and back tracking to calculte the shortest route possible for a salesperson to travel
