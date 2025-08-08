@@ -1,0 +1,353 @@
+---
+title: "A Peak in Toursim: How Does The World Travel?"
+author: "Linh Le"
+date: "2025-04-24"
+runtime: shiny
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+#loading necessary packages
+library(tidyverse)
+library(dplyr)
+library(readxl)
+library(ggplot2)
+library(lubridate)
+library(plotly)
+library(shiny)
+library(leaflet)
+library(sf)
+library(leafpop)
+```
+
+
+Inbound Tourism
+======
+```{r include=FALSE}
+arrivals<-read.csv("arrivals_pivot.csv") #reading csv file 
+countries_arrivals<-unique(arrivals$Country) #setting up the selection list
+
+stay_pivot<-read.csv("stays_pivot.csv") #reading csv file 
+stay_pivot_percent<-stay_pivot|>filter(Stay_Info %in% c("Occupancy rate / rooms","Occupancy rate / bed-places","Average length of stay")) #choose only observations for occupancy rate and average length of stay
+
+stay_pivot_percent<-stay_pivot_percent|>select(-X) #deselect column X
+occupancy_pivot<-as.data.frame(pivot_wider(stay_pivot_percent,id_cols = c(Country,Year),names_from = Stay_Info,values_from = Quantity))  #make a wide pivot table with type of accommodation as column names and the corresponding values as row observation
+
+bed_room<-occupancy_pivot|>select(-`Average length of stay`) #deselect the average length of stay column, keeping bed-places and rooms
+
+bed_length<-occupancy_pivot|>select(-`Occupancy rate / rooms`) #deselect the room occupancy rate column, keeping bed-places and average length of stay
+
+room_length<-occupancy_pivot|>select(-`Occupancy rate / bed-places`) #deselect the bed-places occupancy rate column, keeping rooms and average length of stay
+
+getCluster<-function (year,table) {
+    occupancy_pivot<-table|>filter(Year==year)|>select(-Year) # choose only the observation in the input year and deselect the column year
+    rownames(occupancy_pivot)<-occupancy_pivot$Country #set the rownames to the values on the Country column
+    occupancy_pivot<-occupancy_pivot|>select(-Country)|>na.omit() #deselect the country column and get rid of NA
+    kmeans_basic<- kmeans(occupancy_pivot, 5, nstart = 25) #calculate 5 clusters with a size of 25
+    occupancy_pivot$Cluster <- as.character(kmeans_basic$cluster) #add cluster as a column
+    occupancy_pivot$Country<-rownames(occupancy_pivot) #add back country column for later text in plotly
+    return(occupancy_pivot)
+} #define a function to get the cluster for selected year and dataframe
+```
+
+Inputs {.sidebar data-width=270}
+-------
+Have you dreamed of travelling in a steam locomotive, or sailing on a ship across the oceans, or flying on an airplane through continents? People have always had the need to travel and the more developing global technology and economy, the more regular travelling happens around the world? _So, how busy is the world in travelling?_
+
+* Inbound Arrivals Plot: 
+The total of inbound arrivals to selected country divided by two main visitors type: __Same-day and Overnight visitors__ from 1995 to 2022
+
+Select a country for its number of inbound arrivals 
+```{r choice arrivals}
+inputPanel(
+  selectInput("country_arrivals",label="Country",choices=countries_arrivals,selected="United States")
+) #set up a panel for user to select country
+
+country_arrival<-reactive({dplyr::filter(arrivals,Country==input$country_arrivals)}) #reactive the choice
+```
+* K-Means Cluster Plot:
+__K-Means clustering is a way to classify data into 
+categories based on similarities of the data. This plot use occupancy rate of bed-places/rooms and rooms as similarities__
+
+Occupancy rate in bed-places (_total number of people can be accommodated at once_) and room (_total number of available units_) in the selected year from 1996 to 2022, indicating the thrive of hospitality services in different countries.
+
+Select a year for the cluster
+
+```{r stays}
+inputPanel(
+sliderInput("year_rate", label = "Year",
+              min = 2000, max = 2022, value = 2018, step = 1,sep="",ticks = FALSE)
+) #select a panel for user to select to year
+
+#reactivate each selected year and pair of comparison
+country_bed_room<-reactive({
+  country_stay<-getCluster(input$year_rate,bed_room)
+})
+
+country_bed_length<-reactive({
+  country_stay<-getCluster(input$year_rate,bed_length)
+})
+
+country_room_length<-reactive({
+  country_stay<-getCluster(input$year_rate,room_length)
+})
+```
+
+_Sources_:
+
+1. [UNWTO - Tourism Data Inbound Toursim]("https://www.unwto.org/tourism-statistics/tourism-data-inbound-tourism")
+2. [ UNWTO - Tourism Data Employment]("https://www.unwto.org/tourism-statistics/tourism-data-employment")
+3. [UNWTO - Tourism Data Macroeconomic Indicators]("https://www.unwto.org/tourism-statistics/tourism-data-macroeconomic-indicators")
+4. [Open Data Soft - World Administrative Boundaries]("https://public.opendatasoft.com/explore/dataset/world-administrative-boundaries/export/")
+
+Column {.tabset data-width=700}
+--------------
+### Number of Inbound Arrivals
+```{r bubble}
+renderPlotly({ggplot(country_arrival(),aes(x=Year,y=Number.of.visitors,size=Number.of.visitors,color=Visitor_Type))+
+    geom_point(alpha=0.6)+
+    scale_color_manual(values=c("#CC7722","#FFD801"))+
+    scale_size(range = c(.1, 11), name="Number of Visitors (Thousand)")+
+    scale_y_continuous(labels = scales::label_comma())+
+    labs(title=paste("Number of Inbound Arrivals to",input$country_arrivals,"from", min(country_arrival()$Year), "to", max(country_arrival()$Year)),
+         y = "Number of Visitors (Thousands)",
+         color = "Visitor Type")
+  }) #plot an interactive bubble plot based on the select country
+
+```
+### 5 Means Cluster of Occupancy Rate in Bed-Places and Rooms
+```{r bed_room}
+
+renderPlotly({
+  ggplot(country_bed_room(), aes(x = `Occupancy rate / rooms`, y = `Occupancy rate / bed-places`, color = Cluster,text=Country)) +
+  geom_point()+
+  labs(title=paste("5 Means Cluster of Occupancy Rate of Countries Around the World in",input$year_rate),
+       x= "Occupancy Rate / Rooms (%)",
+       y="Occupancy Rate / Bed-Places (%)")+
+  theme(title = element_text(size=10))}) #plot the clusters based on occupancy rate in bed-places and rooms in the selected year
+```
+### 5 Means Cluster of Occupancy Rate in Bed-Places and Average Length of Stay
+```{r bed_length}
+renderPlotly({
+  ggplot(country_bed_length(), aes(x = `Occupancy rate / bed-places`, y = `Average length of stay`, color = Cluster,text=Country)) +
+  geom_point()+
+  labs(title=paste("5 Means Cluster of Occupancy Rate in Bed-Places and Average Length of Stay of Countries in",input$year_rate),
+       x= "Occupancy Rate / Bed-Places (%)",
+       y="Average Length of Stay (days)")+
+    theme(title = element_text(size=10))}) #plot the clusters based on occupancy rate in bed-places and average length of stay in the selected year
+```
+### 5 Means Cluster of Occupancy Rate in Rooms and Average Length of Stay
+```{r room_length}
+renderPlotly({
+  ggplot(country_room_length(), aes(x = `Occupancy rate / rooms`, y = `Average length of stay`, color = Cluster,text=Country)) +
+  geom_point()+
+  labs(title=paste("5 Means Cluster of Occupancy Rate in Rooms and Average Length of Stay of Countries in",input$year_rate),
+       x= "Occupancy Rate / Rooms (%)",
+       y="Average Length of Stay (days)")+
+    theme(title = element_text(size=10))}) #plot the clusters based on occupancy rate in rooms and average length of stay in the selected year
+```
+Gross Domestic Income (GDP)
+===
+```{r include=FALSE}
+gdp<-read_excel("gdp.xlsx") #read the csv file
+gdp$TimePeriod<-ymd(as.character(gdp$TimePeriod), truncated = 2L) #convert the TimePeriod column to date type
+countries_gdp<-unique(gdp$GeoAreaName) #set up a selection list
+```
+
+Inputs {.sidebar}
+-------
+Tourism has always been a significant share in many countries' GDP, producing large revenue and numerous employment opportunities for locals. The graph shows the changes of tourism's contribution to the selected country's GDP from 2008 to 2022.
+
+Select a country for its GDP growth
+```{r choice gdp}
+inputPanel(
+  selectInput("country_gdp",label="Country",choices=countries_gdp)) #create a panel for selected country
+country_gdp<-reactive({dplyr::filter(gdp,GeoAreaName==input$country_gdp)}) #filter the data by the selected country and reactive
+```
+Column
+----
+### The Percentage of Tourism in Gross Domestic Product (GDP) from 2008 to 2022
+```{r lineplot}
+renderPlot({ggplot(country_gdp(),aes(x=TimePeriod,y=Total))+
+  geom_line(col = "#158700",linewidth=2)+
+  geom_point(col="yellow",size=4)+
+  scale_x_date(date_breaks = "1 year",date_labels = "%Y")+
+  labs(
+    title = paste("The Change of Tourism Percent in GPD of",input$country, "from", substr(min(country_gdp()$TimePeriod),1,4), "to", substr(max(country_gdp()$TimePeriod),1,4)),
+    x = "Year",
+    y = "GDP (%)")+
+    theme(axis.text.x=element_text(size=15),
+          axis.text.y=element_text(size=15),
+          axis.title.x=element_text(size=15),
+          axis.title.y=element_text(size=15))})
+#make a time series scatter and line plot 
+```
+
+Transportation {data-orientation=rows}
+======
+```{r include = FALSE}
+#reading from csv file
+total_transportation <-read.csv("total_transport.csv")
+growth_transportation<-read.csv('growth_transport.csv')
+#fixing the error in the country names because 's was encoded when reading from CSV file
+total_transportation[234,2]<-"Lao People's Democratic Republic"
+total_transportation[235,2]<-"Lao People's Democratic Republic"
+total_transportation[c(430,431,432),2]<-"Türkiye"
+total_transportation[c(108,109),2]<-"Cote D´Ivoire"
+total_transportation[c(114,115),2]<-"Curaçao"
+growth_transportation[c(2274:2299),4]<-"Cote D´Ivoire"
+growth_transportation[c(2412:2467),4]<-"Curaçao"
+growth_transportation[c(5130,5181),4]<-"Lao People's Democratic Republic"
+growth_transportation[c(9240:9323),4]<-"Türkiye"
+#convert column year's structure to date type
+growth_transportation$Year<-ymd(as.character(growth_transportation$Year), truncated = 2L)
+#setting up selection list
+countries_transport_selection<-unique(total_transportation$Country)
+```
+
+Inputs {.sidebar}
+------
+Tourists can travel by air, land, or water to a country. Using this data, a country can focus on enhancing a specific type of transportation to boost the contribution to the economy.
+
+Select a country for its change in means of transportation
+```{r choice}
+inputPanel(
+  selectInput("country_transport",label="Country",choices=countries_transport_selection)
+) #set up a panel for selection
+#filter the data based on the selected country
+country_mode<-reactive({dplyr::filter(total_transportation,Country==input$country_transport)}) 
+country_growth<-reactive({dplyr::filter(growth_transportation,Country==input$country_transport)})
+```
+
+Row
+-------
+### Total of Arrivals of Country By Means of Transportation from 1995 to 2022
+```{r transport bar}
+renderPlot({ggplot(country_mode(),aes(x=Mode,y=Total))+
+    geom_bar(stat='identity',fill='orange')+
+    labs(
+      title = paste("Total of Arrivals to",input$country_transport, "By Means of Transportation from 1995 to 2022"),
+      x = "Transportation",
+      y = "Total (Thousands)")+
+    theme(axis.text.x=element_text(size=15),
+          axis.text.y=element_text(size=15),
+          axis.title.x=element_text(size=15),
+          axis.title.y=element_text(size=15))})
+#make a bar plot
+```
+Row
+-----
+### The Change in Usage of Transportation from 1995 to 2022
+
+```{r transport growth}
+renderPlot({ggplot(country_growth(),aes(x=Year,y=Arrivals,color=Mode))+
+    geom_line(linewidth=2)+
+    scale_color_manual(values = c("#64f187","brown","blue"))+
+    labs(
+      title = paste("The Change in Total of Arrivals to",input$country_transport, "By Means of Transportation from", substr(min(country_growth()$Year),1,4), "to", substr(max(country_growth()$Year),1,4)),
+      x = "Year",
+      y = "Total (Thousands)")+
+    theme(axis.text.x=element_text(size=15),
+          axis.text.y=element_text(size=15),
+          axis.title.x=element_text(size=15),
+          axis.title.y=element_text(size=15))}) #make a time series line plot
+```
+
+Employment {data-oritentation=columns}
+====
+```{r images}
+employment_2022<-read.csv('employment_2022.csv') #read the csv file
+employment_2022<-employment_2022|>group_by(Country)|>mutate(sum_divison = sum(Divison_total,na.rm=TRUE)) #sum all the divisons for each country, ignore the NA and add the data as another column for color-coding purpose of the map 
+
+world <- read_sf("world-administrative-boundaries.shp") #read the shapefile
+
+geo<-world|>full_join(employment_2022,by=c('iso3'='ISO.3.Letter'),relationship = "many-to-many") #join the employment data with the shapefile
+
+try_plot<-geo|>select(4,12,9,21,22,23,24,29) #select only necessary columns
+
+percent_plot<-pivot_longer(try_plot,-c(geometry,name,Divison,sum_divison),
+             names_to = "Type",
+             values_to = "Percent") #make a pivot table to convert the female/male percent in self-employment and employment from column names to row observations and assign corresponding value to it 
+percent_plot<-percent_plot|>mutate(type_factor=factor(Type,levels=c("female_self_employed_percent_divison","female_employed_percent_divison","male_self_employed_percent_divison","male_employed_percent_divison"))) #create a factor column to categorization later in plotting
+percent_plot$sum_divison[is.na(percent_plot$sum_divison)]<-0 #The country without observations in the employment data will not have sum of divisons equal to 0 but NA. This commands target these countries and convert NA to 0
+percent_plot$sum_div_na<-na_if(percent_plot$sum_divison,0) #create a column of sum of divisons with NA observations, which will be used a text in the popup in the leaflet map
+percent_plot$sum_div_na<-round(percent_plot$sum_div_na,0) #round all the sum to no decimals
+
+makePopupPlot <- function (clickArea, percent_plot) {
+  #extract the observations limited to a country passed to the argument
+  #if sum all the percent observations is equal to 0, create a empty graph
+  check_na<-percent_plot|>filter(name==clickArea)|>select(Percent,sum_divison)
+  if (sum(check_na$Percent,na.rm=TRUE)==0){
+    popUpPlot<-ggplot(percent_plot|>filter(name==clickArea),aes(x=Divison,y=Percent))+
+      scale_x_discrete(labels = c('Accomadation','Beverage Serving','Travel Arrangement'))+
+      labs(
+        title = paste("Distribution of Work Force in",clickArea, "in 2022"),
+        x = "Areas of Tourism",
+        y="Percent of Total Employees (%)"
+      )+
+      theme(plot.margin = unit(c(1,4,3,0.5),"cm"),
+            axis.text.x = element_text(size = 7),
+            axis.text.y = element_text(size = 7),
+            axis.title.y = element_text(size = 8),
+            axis.title.x = element_text(size = 8),
+            legend.text = element_text(size = 7),
+            legend.title = element_text(size = 7),
+            legend.position = "bottom")
+    
+  }else {
+    popUpPlot<-ggplot(percent_plot|>filter(name==clickArea),aes(x=Divison,y=Percent,fill=type_factor))+
+    geom_bar(position="dodge",stat='identity')+
+    scale_x_discrete(labels = c('Accomadation','Food/Beverage Serving','Travel Arrangement'))+
+    scale_fill_manual(values = c("#FDA4BA","#F25278","#48AAAD","navy"),name = "Employment Type (%)", labels = c("F Self-employed", "F Employed","M Self-employed", "M Employed"))+
+    labs(
+      title = paste("Distribution of Work Force in",clickArea, "in 2022"),
+      x = "Areas of Tourism",
+      y="Percent of Total Employees (%)"
+    )+
+      theme(plot.margin = unit(c(1,4,3,0.5),"cm"),
+            axis.text.x = element_text(size = 7),
+            axis.text.y = element_text(size = 7),
+            axis.title.y = element_text(size = 8),
+            axis.title.x = element_text(size = 8),
+            legend.text = element_text(size = 7),
+            legend.title = element_text(size = 7),
+            legend.position = "bottom")
+  } #else plot a bar graph for each divison
+  return(popUpPlot) #return the plot
+}
+
+p<-as.list(NULL) #create an empty list
+p <- lapply(1:nrow(percent_plot), function(i) {
+  p[[i]] <- makePopupPlot(percent_plot$name[i], percent_plot)
+}) #loop through every observation in the dataframe and make every returned graph a list, creating a list of list
+
+
+color_pal<-colorNumeric("Blues",domain=percent_plot$sum_divison) #set up the color by numeric variable, set it to color by the sum of divison
+```
+Inputs {.sidebar}
+----
+Is tourism a male-dominant field? Or is it female-dominant? Categorized by self-employment and employment, the map shows the distribution of total number female and male workers in services in accommodation, beverage serving activity, and travel arrangement, which will help answer these two questions.
+
+_Note:_ __Countries without data about the number of female and male employees will have blank graphs and total number of employees (if applicable)__
+
+Column
+---------
+### Female and Male Employee Percent in Accommodation, Food/Beverage Serving, and Travel Arrangement
+```{r leaflet}
+leaflet() |>
+  addProviderTiles("CartoDB.Positron")|>
+  setView(29.11849194487093, 3.0815191090927714, zoom = 1)|>
+  addPolygons(data = percent_plot, 
+              fillOpacity = 0.7,
+              fillColor = ~color_pal(percent_plot$sum_divison),
+              weight = 1, 
+              smoothFactor = 1,
+              popup = paste0("<b>Country:
+                             </b>","<b>",percent_plot$name,"</b>","<br>",
+                "<b>The Total Number of Employees: </b>","<b>",percent_plot$sum_div_na,"</b>","<br>",
+                popupGraph(p,type=c("svg"),width = 580,height = 250))) #make choropleth leaflet map
+```
+
